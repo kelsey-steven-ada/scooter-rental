@@ -5,3 +5,5 @@ from ..db import db
 class Scooter(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     rentals: Mapped["Rental"] = relationship(back_populates="scooter")
+    model: Mapped[str]
+    charge_percent: Mapped[float]

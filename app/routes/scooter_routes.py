@@ -13,20 +13,36 @@ def get_scooters():
     scooter_query = db.select(Scooter)
 
     if filter_query:
-        no_rentals_scooters = db.select(Scooter).where(~Scooter.rentals.has())
-        unreturned_scooters = db.select(Scooter).join(Scooter.rentals).where(Rental.is_returned == False)
-        returned_scooters = except_(scooter_query, unreturned_scooters)
-        united = union(no_rentals_scooters, returned_scooters)
-        scooter_query = scooter_query.from_statement(united)
+        # Scooters with no rental history and acceptable battery charge
+        no_rental_history = scooter_query.where(
+                                ~Scooter.rentals.has()
+                            ).where(
+                                Scooter.charge_percent >= 15.0
+                            )
+
+        # For scooters with a rental history:
+        # Determine which scooters have outstanding rentals or low battery
+        unreturned = scooter_query.join(Scooter.rentals).where(
+                        Rental.is_returned == False
+                    )
+        uncharged = scooter_query.where(Scooter.charge_percent <= 15.0)
+        uncharged_or_unreturned = union(unreturned, uncharged)
+
+        # Use set operations to get all scooters except uncharged or unreturned
+        returned_and_charged = except_(scooter_query, uncharged_or_unreturned)
+        all_available_scooters = union(no_rental_history, returned_and_charged)
+        scooter_query = scooter_query.from_statement(all_available_scooters)
 
     scooters = db.session.scalars(scooter_query)
 
     response = []
     for scooter in scooters:
-        is_available = is_scooter_available(scooter.id)
+        is_available = is_scooter_available(scooter)
         response.append(
             {
                 "id": scooter.id,
+                "model": scooter.model,
+                "charge_percent": scooter.charge_percent,
                 "is_available": is_available,
             }
         )
@@ -35,7 +51,7 @@ def get_scooters():
 @bp.patch("/<scooter_id>/rent")
 def rent_scooter(scooter_id):
     scooter = validate_model(Scooter, scooter_id)
-    if not is_scooter_available(scooter_id):
+    if not is_scooter_available(scooter):
         return {"message": f"Scooter #{scooter_id} is not available"}
 
     request_body = request.get_json()
@@ -55,8 +71,9 @@ def rent_scooter(scooter_id):
 
     return {
         "rental_id": new_rental.id,
-        "scooter_id": scooter.id,
         "user_id": user.id,
+        "scooter_id": scooter.id,
+        "model": scooter.model,
         "is_returned": False
     }
 
@@ -75,10 +92,12 @@ def return_scooter(scooter_id):
 
     # Is this scooter rented out to the user supplied?
     rental_query = db.select(Rental).where(
-        Rental.scooter_id == scooter_id 
-        and Rental.user_id == user_id 
-        and not Rental.is_returned
-    )
+                                        Rental.scooter_id == scooter_id
+                                    ).where(
+                                        Rental.user_id == user_id
+                                    ).where(
+                                        Rental.is_returned == False
+                                    )
     rental = db.session.scalar(rental_query)
     if not rental:
         response = {"message": "The requested transaction could not be completed"}
@@ -90,8 +109,9 @@ def return_scooter(scooter_id):
 
     return {
         "rental_id": rental.id,
-        "scooter_id": scooter.id,
         "user_id": user.id,
+        "scooter_id": scooter.id,
+        "model": scooter.model,
         "is_returned": True
     }
 
@@ -110,14 +130,18 @@ def validate_model(cls, id):
     response = {"message": f"{cls.__name__} {id} not found"}
     abort(make_response(response, 404))
 
-def is_scooter_available(id):
+def is_scooter_available(scooter):
+    # A scooter is unavailable if the charge is 15% or less
+    if scooter.charge_percent <= 15.0:
+        return False
+
     rentals_query = db.select(
                             func.count()
                         ).select_from(
                             Rental
                         ).where(
-                            Rental.scooter_id == id and not Rental.is_returned
-                        )
+                            Rental.scooter_id == scooter.id
+                        ).where(Rental.is_returned == False)
     unreturned_rental_count = db.session.scalar(rentals_query)
     return unreturned_rental_count == 0
 
@@ -127,7 +151,7 @@ def is_user_eligible_to_rent(id):
                         ).select_from(
                             Rental
                         ).where(
-                            Rental.user_id == id and not Rental.is_returned
-                        )
+                            Rental.user_id == id
+                        ).where(Rental.is_returned == False)
     unreturned_rental_count = db.session.scalar(rentals_query)
     return unreturned_rental_count == 0

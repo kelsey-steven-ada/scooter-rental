@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request, abort, make_response
 from ..db import db
 from ..models.scooter import Scooter
 from ..models.rental import Rental
-from ..models.user import User
+from ..models.customer import Customer
 from sqlalchemy import func, union, except_
 
 bp = Blueprint("scooters", __name__, url_prefix="/scooters")
@@ -55,23 +55,23 @@ def rent_scooter(scooter_id):
         return {"message": f"Scooter #{scooter_id} is not available"}
 
     request_body = request.get_json()
-    user_id = request_body.get("user_id")
-    if not user_id:
-        response = {"message": "User id must be supplied"}
+    customer_id = request_body.get("customer_id")
+    if not customer_id:
+        response = {"message": "Customer id must be supplied"}
         abort(make_response(response , 400))
 
-    user = validate_model(User, user_id)
-    is_user_eligible = is_user_eligible_to_rent(user_id)
+    customer = validate_model(Customer, customer_id)
+    is_user_eligible = is_user_eligible_to_rent(customer_id)
     if not is_user_eligible:
-        return {"message": "User cannot rent a scooter at this time"}
+        return {"message": "Customer cannot rent a scooter at this time"}
 
-    new_rental = Rental(user=user, scooter=scooter)
+    new_rental = Rental(customer=customer, scooter=scooter)
     db.session.add(new_rental)
     db.session.commit()
 
     return {
         "rental_id": new_rental.id,
-        "user_id": user.id,
+        "customer_id": customer.id,
         "scooter_id": scooter.id,
         "model": scooter.model,
         "is_returned": False
@@ -84,17 +84,17 @@ def return_scooter(scooter_id):
 
     # Does the user exist
     request_body = request.get_json()
-    user_id = request_body.get("user_id")
-    if not user_id:
-        response = {"message": "User id must be supplied"}
+    customer_id = request_body.get("customer_id")
+    if not customer_id:
+        response = {"message": "Customer id must be supplied"}
         abort(make_response(response , 400))
-    user = validate_model(User, user_id)
+    customer = validate_model(Customer, customer_id)
 
     # Is this scooter rented out to the user supplied?
     rental_query = db.select(Rental).where(
                                         Rental.scooter_id == scooter_id
                                     ).where(
-                                        Rental.user_id == user_id
+                                        Rental.customer_id == customer_id
                                     ).where(
                                         Rental.is_returned == False
                                     )
@@ -109,7 +109,7 @@ def return_scooter(scooter_id):
 
     return {
         "rental_id": rental.id,
-        "user_id": user.id,
+        "customer_id": customer.id,
         "scooter_id": scooter.id,
         "model": scooter.model,
         "is_returned": True
@@ -151,7 +151,7 @@ def is_user_eligible_to_rent(id):
                         ).select_from(
                             Rental
                         ).where(
-                            Rental.user_id == id
+                            Rental.customer_id == id
                         ).where(Rental.is_returned == False)
     unreturned_rental_count = db.session.scalar(rentals_query)
     return unreturned_rental_count == 0

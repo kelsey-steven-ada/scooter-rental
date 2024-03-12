@@ -84,13 +84,13 @@ def test_available_only_param_returns_two_scooters(client, low_charge_scooter):
 
 def test_rent_available_scooter(client, two_users):
     response = client.patch("/scooters/2/rent", json={
-        "user_id": 2
+        "customer_id": 2
     })
     
     response_body = response.get_json()
     assert response_body == {
         "rental_id": 3,
-        "user_id": 2,
+        "customer_id": 2,
         "scooter_id": 2,
         "model": "Nimbus Sparkle",
         "is_returned": False
@@ -98,7 +98,7 @@ def test_rent_available_scooter(client, two_users):
 
 def test_rent_unavailable_scooter(client, two_users):
     response = client.patch("/scooters/1/rent", json={
-        "user_id": 2
+        "customer_id": 2
     })
     
     response_body = response.get_json()
@@ -106,7 +106,7 @@ def test_rent_unavailable_scooter(client, two_users):
 
 def test_rent_low_charge_scooter_fails(client, low_charge_scooter):
     response = client.patch("/scooters/4/rent", json={
-        "user_id": 2
+        "customer_id": 2
     })
     
     response_body = response.get_json()
@@ -114,22 +114,40 @@ def test_rent_low_charge_scooter_fails(client, low_charge_scooter):
 
 def test_rent_scooter_user_ineligible(client, scooter_rented_twice):
     response = client.patch("/scooters/2/rent", json={
-        "user_id": 1
+        "customer_id": 1
     })
     
     response_body = response.get_json()
-    assert response_body == {"message": "User cannot rent a scooter at this time"}
+    assert response_body == {"message": "Customer cannot rent a scooter at this time"}
 
 def test_return_rented_scooter(client, two_users):
     response = client.patch("/scooters/1/return", json={
-        "user_id": 1
+        "customer_id": 1
     })
     
     response_body = response.get_json()
     assert response_body == {
         "rental_id": 2,
-        "user_id": 1,
+        "customer_id": 1,
         "scooter_id": 1,
         "model": "Speedster VII",
         "is_returned": True
     }
+
+def test_create_data(create_challenge_data):
+    # Generate database file
+    #     pg_dump -U postgres scooter_rental_test > scooter_rental_all_tables.pgsql
+    # Import the data into the database
+    #     psql -U postgres scooter_rental_test < scooter_rental_all_tables.pgsql
+
+    # Or copy tables individually
+    #     COPY scooter TO '/Users/kelseysteven/Documents/playground/Flask/scooter-rental/scooter_table.csv'  WITH DELIMITER ',' CSV HEADER;
+    #     COPY customer TO '/Users/kelseysteven/Documents/playground/Flask/scooter-rental/customer_table.csv'  WITH DELIMITER ',' CSV HEADER;
+    #     COPY rental TO '/Users/kelseysteven/Documents/playground/Flask/scooter-rental/rental_table.csv'  WITH DELIMITER ',' CSV HEADER;
+    # Import the data into the database
+    #     COPY scooter FROM '/Users/kelseysteven/Documents/playground/Flask/scooter-rental/scooter_table.csv' DELIMITER ',' CSV HEADER;
+    #     COPY customer FROM '/Users/kelseysteven/Documents/playground/Flask/scooter-rental/customer_table.csv' DELIMITER ',' CSV HEADER;
+    #     COPY rental FROM '/Users/kelseysteven/Documents/playground/Flask/scooter-rental/rental_table.csv' DELIMITER ',' CSV HEADER;
+
+    
+    assert 1 + 1 == 2

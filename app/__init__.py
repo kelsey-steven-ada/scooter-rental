@@ -2,7 +2,7 @@ import os
 from flask import Flask
 from .db import db, migrate
 from .routes.scooter_routes import bp
-from .models import user, scooter, rental
+from .models import customer, scooter, rental
 
 def create_app(test_config=None):
     app = Flask(__name__)
